@@ -8,6 +8,7 @@ import {
   approveAction,
   executeAction,
   completeAction,
+  attachContextPack,
 } from "./index.js";
 
 describe("@aion/actions", () => {
@@ -73,5 +74,19 @@ describe("@aion/actions", () => {
     const claimed = claimAction(action, "operator");
     assert.equal(claimed.status, "claimed");
     assert.equal(claimed.claimed_by, "operator");
+  });
+
+  it("attaches context packs", () => {
+    const action = normalizeCreateInput({
+      source: "revenue_copilot",
+      entity_type: "lead",
+      entity_id: "lead_1",
+      action_type: "call",
+      title: "Call",
+      reason: "Intent",
+      requires_approval: false,
+    });
+    const withPack = attachContextPack(action, "ctx_01");
+    assert.equal(withPack.context_pack_id, "ctx_01");
   });
 });

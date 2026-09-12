@@ -4,8 +4,7 @@ import { createExecutionContext, createRequestId } from "./index.js";
 
 describe("@aion/core", () => {
   it("creates request ids", () => {
-    const id = createRequestId();
-    assert.match(id, /^req_/);
+    assert.match(createRequestId(), /^req_/);
   });
 
   it("builds execution context", () => {
@@ -15,6 +14,6 @@ describe("@aion/core", () => {
       permissions: ["actions:read"],
     });
     assert.equal(ctx.actor, "operator");
-    assert.ok(ctx.requestId.startsWith("req_"));
+    assert.match(ctx.requestId, /^req_/);
   });
 });

@@ -130,7 +130,7 @@ export function App() {
 
       <footer className="status-bar">
         <span>Prototype · Lifecycle V0</span>
-        <span>First producer: Revenue Copilot · First consumer: Operator Console</span>
+        <span>First producer: Revenue Copilot · Context Pack on execute · Operator Console</span>
       </footer>
     </main>
   );

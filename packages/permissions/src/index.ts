@@ -29,6 +29,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "actions:execute",
     "actions:complete",
     "actions:outcome",
+    "context:build",
+    "context:read",
   ],
   agent: [
     "actions:create",
@@ -37,10 +39,12 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "actions:execute",
     "actions:complete",
     "actions:outcome",
+    "context:build",
+    "context:read",
   ],
   producer: ["actions:create", "actions:read"],
-  viewer: ["actions:read"],
-  admin: ["actions:admin"],
+  viewer: ["actions:read", "context:read"],
+  admin: ["actions:admin", "context:build", "context:read"],
 };
 
 export function permissionsForRole(role: string): Permission[] {

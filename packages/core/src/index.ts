@@ -1,8 +1,8 @@
 /**
  * AION Core — shared contracts for every Cursor-built AION tool.
  *
- * Every service should expose: inputSchema, execute(), eventEmitter, outputSchema
- * via the AionTool interface so Agent OS can call it later.
+ * Every service exposes: inputSchema, execute(), eventEmitter, outputSchema
+ * via AionTool so Agent OS can call it later.
  */
 
 export type Permission =
@@ -13,7 +13,9 @@ export type Permission =
   | "actions:execute"
   | "actions:complete"
   | "actions:outcome"
-  | "actions:admin";
+  | "actions:admin"
+  | "context:build"
+  | "context:read";
 
 export interface ExecutionContext {
   actor: string;

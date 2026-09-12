@@ -49,6 +49,9 @@ export function ActionRow({
           <span className={`chip ${domainChip(action)}`}>{domainChip(action)}</span>
           <span className="chip">{action.source.replaceAll("_", " ")}</span>
           <span className="chip">{action.status.replaceAll("_", " ")}</span>
+          {action.context_pack_id ? (
+            <span className="chip context">ctx {action.context_pack_id.slice(-6)}</span>
+          ) : null}
         </div>
         <h2 className="title">{action.title}</h2>
         <p className="reason">{action.reason}</p>

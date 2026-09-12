@@ -56,9 +56,43 @@ describe("action-service", () => {
 
     const approved = await engine.approve(action.id, "ceo", true, ctx);
     assert.equal(approved.status, "approved");
-    const executed = await engine.executeAction(action.id, ctx);
+
+    const { action: executed, contextPack } = await engine.executeAction(action.id, ctx);
     assert.equal(executed.status, "executing");
+    assert.ok(executed.context_pack_id);
+    assert.equal(contextPack.id, executed.context_pack_id);
+    assert.equal(contextPack.entity_id, "lead_302");
+    assert.ok(contextPack.applicable_playbooks.length >= 1);
+
     const done = await engine.complete(action.id, "completed", ctx);
     assert.equal(done.status, "completed");
+  });
+
+  it("ingests Revenue Copilot events into the queue", async () => {
+    const res = await app.request("/v1/producers/revenue-copilot/events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-aion-actor": "revenue_copilot",
+        "x-aion-role": "producer",
+        "x-aion-actor-type": "agent",
+      },
+      body: JSON.stringify({
+        eventType: "proposal_viewed",
+        leadId: "lead_888",
+        leadName: "Priya",
+        confidence: 0.93,
+        details: ["proposal_viewed_3x", "high_engagement"],
+      }),
+    });
+    assert.equal(res.status, 201);
+    const body = (await res.json()) as {
+      action: { source: string; action_type: string; priority: number };
+      producer: string;
+    };
+    assert.equal(body.producer, "revenue_copilot");
+    assert.equal(body.action.source, "revenue_copilot");
+    assert.equal(body.action.action_type, "call");
+    assert.ok(body.action.priority >= 85);
   });
 });

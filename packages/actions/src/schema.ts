@@ -1,6 +1,5 @@
 import type { CreateActionInput } from "./index.js";
 
-/** Lightweight runtime validation for Action create payloads (no zod dependency in V0). */
 export function validateCreateActionInput(input: unknown): input is CreateActionInput {
   if (!input || typeof input !== "object") return false;
   const v = input as Record<string, unknown>;
