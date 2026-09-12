@@ -25,40 +25,11 @@ export interface CreateActionInput {
   context_pack_id?: string | null;
 }
 
-export interface ClaimActionInput {
-  actionId: string;
-  claimedBy: string;
-}
-
-export interface ApproveActionInput {
-  actionId: string;
-  approvedBy: string;
-  approve: boolean;
-  notes?: string;
-}
-
-export interface ExecuteActionInput {
-  actionId: string;
-  executedBy: string;
-}
-
-export interface CompleteActionInput {
-  actionId: string;
-  completedBy: string;
-  status?: "completed" | "failed" | "cancelled";
-}
-
-export interface RecordOutcomeInput {
-  actionId: string;
-  outcome: Omit<ActionOutcome, "recordedAt"> & { recordedAt?: string };
-}
-
 let seq = 0;
 
 export function createActionId(): string {
   seq += 1;
-  const stamp = Date.now().toString(36);
-  return `act_${stamp}_${seq.toString().padStart(3, "0")}`;
+  return `act_${Date.now().toString(36)}_${seq.toString().padStart(3, "0")}`;
 }
 
 export function normalizeCreateInput(input: CreateActionInput): ActionObject {
@@ -106,9 +77,9 @@ export function canTransition(from: ActionStatus, to: ActionStatus): boolean {
   if (TERMINAL.includes(from)) return false;
 
   const allowed: Record<ActionStatus, ActionStatus[]> = {
-  queued: ["claimed", "awaiting_approval", "approved", "executing", "automated", "cancelled"],
-  claimed: ["awaiting_approval", "approved", "executing", "cancelled", "queued"],
-  awaiting_approval: ["approved", "rejected", "cancelled", "claimed"],
+    queued: ["claimed", "awaiting_approval", "approved", "executing", "automated", "cancelled"],
+    claimed: ["awaiting_approval", "approved", "executing", "cancelled", "queued"],
+    awaiting_approval: ["approved", "rejected", "cancelled", "claimed"],
     approved: ["executing", "automated", "cancelled"],
     rejected: [],
     executing: ["completed", "failed", "cancelled"],
@@ -122,7 +93,9 @@ export function canTransition(from: ActionStatus, to: ActionStatus): boolean {
 }
 
 export function claimAction(action: ActionObject, claimedBy: string): ActionObject {
-  assertTransition(action.status, "claimed");
+  if (!canTransition(action.status, "claimed")) {
+    throw new Error(`Invalid transition ${action.status} → claimed`);
+  }
   const now = new Date().toISOString();
   return {
     ...action,
@@ -139,7 +112,9 @@ export function approveAction(
   approve: boolean
 ): ActionObject {
   const next: ActionStatus = approve ? "approved" : "rejected";
-  assertTransition(action.status, next);
+  if (!canTransition(action.status, next)) {
+    throw new Error(`Invalid transition ${action.status} → ${next}`);
+  }
   const now = new Date().toISOString();
   return {
     ...action,
@@ -151,22 +126,15 @@ export function approveAction(
 }
 
 export function executeAction(action: ActionObject): ActionObject {
-  const from =
-    action.status === "automated" || action.status === "approved" || action.status === "claimed"
-      ? action.status
-      : action.requires_approval
-        ? action.status
-        : action.status === "queued"
-          ? "queued"
-          : action.status;
-
-  if (!canTransition(from, "executing") && action.status !== "approved" && action.status !== "queued" && action.status !== "automated" && action.status !== "claimed") {
-    throw new Error(`Cannot execute action in status ${action.status}`);
-  }
   if (action.requires_approval && action.status !== "approved" && action.status !== "automated") {
     throw new Error("Action requires approval before execution");
   }
-
+  if (
+    !["approved", "queued", "claimed", "automated"].includes(action.status) &&
+    !canTransition(action.status, "executing")
+  ) {
+    throw new Error(`Cannot execute action in status ${action.status}`);
+  }
   const now = new Date().toISOString();
   return {
     ...action,
@@ -204,29 +172,21 @@ export function markAutomated(action: ActionObject): ActionObject {
   if (action.requires_approval && action.status !== "approved") {
     throw new Error("Automated execution still requires prior approval");
   }
-  const now = new Date().toISOString();
   return {
     ...action,
     status: "automated",
-    updated_at: now,
+    updated_at: new Date().toISOString(),
   };
 }
 
-function assertTransition(from: ActionStatus, to: ActionStatus): void {
-  if (!canTransition(from, to)) {
-    throw new Error(`Invalid transition ${from} → ${to}`);
-  }
+export function attachContextPack(action: ActionObject, contextPackId: string): ActionObject {
+  return {
+    ...action,
+    context_pack_id: contextPackId,
+    updated_at: new Date().toISOString(),
+  };
 }
 
-/**
- * Bucket an action for the operator console.
- * NOW: priority >= 85 or urgency critical/high + due soon
- * TODAY: due today or priority >= 70
- * AUTOMATED: status automated
- * NEEDS_YOU: awaiting_approval or CEO decision
- * QUEUED: everything else open
- * COMPLETED: terminal success/fail/cancel/reject
- */
 export function bucketAction(action: ActionObject, now = new Date()): ActionBucket {
   if (["completed", "failed", "cancelled", "rejected"].includes(action.status)) {
     return "completed";
@@ -288,3 +248,4 @@ export function groupByBucket(
 }
 
 export * from "./schema.js";
+

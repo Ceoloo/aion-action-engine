@@ -234,6 +234,9 @@ input {
 .chip.needs_you::before {
   background: var(--danger);
 }
+.chip.context::before {
+  background: #1d4e89;
+}
 
 .title {
   margin: 0;

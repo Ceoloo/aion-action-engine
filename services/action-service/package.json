@@ -16,6 +16,7 @@
   "dependencies": {
     "@aion/actions": "workspace:*",
     "@aion/connectors": "workspace:*",
+    "@aion/context": "workspace:*",
     "@aion/core": "workspace:*",
     "@aion/events": "workspace:*",
     "@aion/permissions": "workspace:*",

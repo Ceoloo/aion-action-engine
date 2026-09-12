@@ -1,6 +1,7 @@
 import type { ActionObject, ActionOutcome, ExecutionContext, Permission } from "@aion/core";
 import {
   approveAction,
+  attachContextPack,
   claimAction,
   completeAction,
   executeAction,
@@ -14,6 +15,7 @@ import {
 } from "@aion/actions";
 import { ActionEventEmitter, actionEventDefinitions, statusToEventName } from "@aion/events";
 import { assertPermission } from "@aion/permissions";
+import { ContextPackBuilder, type ContextPack } from "@aion/context";
 import type { AionTool } from "@aion/core";
 import type { ActionRepository } from "./db/repository.js";
 
@@ -28,18 +30,25 @@ export class ActionEngine implements AionTool<CreateActionInput, ActionObject> {
     "actions:execute",
     "actions:complete",
     "actions:outcome",
+    "context:build",
+    "context:read",
   ];
   readonly events = actionEventDefinitions;
   readonly inputSchema = createActionInputSchema;
   readonly outputSchema = actionOutputSchema;
 
+  readonly contextBuilder: ContextPackBuilder;
+
   constructor(
     private readonly repo: ActionRepository,
-    private readonly bus = new ActionEventEmitter()
+    private readonly bus = new ActionEventEmitter(),
+    contextBuilder?: ContextPackBuilder
   ) {
+    this.contextBuilder = contextBuilder ?? new ContextPackBuilder();
     this.bus.on("*", async (event) => {
       this.repo.insertEvent(event);
     });
+    this.contextBuilder.hydrate(this.repo.listContextPacks());
   }
 
   validate(input: CreateActionInput): boolean {
@@ -92,11 +101,25 @@ export class ActionEngine implements AionTool<CreateActionInput, ActionObject> {
     return this.persistTransition(next, ctx.actor);
   }
 
-  async executeAction(actionId: string, ctx: ExecutionContext): Promise<ActionObject> {
+  async executeAction(
+    actionId: string,
+    ctx: ExecutionContext
+  ): Promise<{ action: ActionObject; contextPack: ContextPack }> {
     assertPermission(ctx, "actions:execute");
     const current = this.require(actionId);
-    const next = executeAction(current);
-    return this.persistTransition(next, ctx.actor);
+
+    const contextPack = this.buildContextForAction(current, ctx);
+    this.repo.upsertContextPack(contextPack);
+
+    let next = attachContextPack(current, contextPack.id);
+    next = executeAction(next);
+    await this.persistTransition(next, ctx.actor);
+    await this.bus.emit("context.built", next, ctx.actor, {
+      contextPackId: contextPack.id,
+      sections: contextPack.recommended_context_window.includeSections,
+    });
+
+    return { action: next, contextPack };
   }
 
   async complete(
@@ -121,6 +144,37 @@ export class ActionEngine implements AionTool<CreateActionInput, ActionObject> {
     this.repo.upsert(next);
     await this.bus.emit("action.outcome_recorded", next, ctx.actor, { outcome });
     return next;
+  }
+
+  buildContextForAction(action: ActionObject, ctx: ExecutionContext): ContextPack {
+    assertPermission(ctx, "context:build");
+    return this.contextBuilder.build({
+      actor: ctx.actor,
+      task: action.action_type,
+      entityType: action.entity_type,
+      entityId: action.entity_id,
+      actionId: action.id,
+    });
+  }
+
+  async buildContext(
+    input: {
+      actor: string;
+      task: string;
+      entityType: ActionObject["entity_type"];
+      entityId: string;
+      actionId?: string;
+    },
+    ctx: ExecutionContext
+  ): Promise<ContextPack> {
+    assertPermission(ctx, "context:build");
+    const pack = this.contextBuilder.build(input);
+    this.repo.upsertContextPack(pack);
+    return pack;
+  }
+
+  getContextPack(id: string): ContextPack | null {
+    return this.contextBuilder.get(id) ?? this.repo.getContextPack(id);
   }
 
   getEvents(actionId?: string) {

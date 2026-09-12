@@ -11,6 +11,7 @@ describe("@aion/permissions", () => {
       permissions: permissionsForRole("operator"),
     });
     assert.equal(hasPermission(ctx, "actions:approve"), true);
+    assert.equal(hasPermission(ctx, "context:build"), true);
     assert.doesNotThrow(() => assertPermission(ctx, "actions:execute"));
   });
 
