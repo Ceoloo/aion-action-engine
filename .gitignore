@@ -1,0 +1,13 @@
+node_modules
+dist
+.turbo
+.DS_Store
+*.log
+.env
+.env.local
+.netlify
+data/*.db
+data/*.db-*
+coverage
+.vite
+*.tsbuildinfo
