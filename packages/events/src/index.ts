@@ -9,7 +9,8 @@ export type ActionEventName =
   | "action.completed"
   | "action.failed"
   | "action.outcome_recorded"
-  | "action.cancelled";
+  | "action.cancelled"
+  | "context.built";
 
 export interface ActionEvent {
   id: string;
@@ -68,6 +69,11 @@ export const actionEventDefinitions: EventDefinition[] = [
     description: "Action cancelled",
     schema: { type: "object" },
   },
+  {
+    name: "context.built",
+    description: "Context pack hydrated for an action",
+    schema: { type: "object", properties: { contextPackId: { type: "string" } } },
+  },
 ];
 
 let eventSeq = 0;
@@ -104,7 +110,6 @@ export class ActionEventEmitter {
       payload: { ...payload, status: action.status, priority: action.priority },
     };
     this.history.push(event);
-
     const targeted = this.listeners.get(name);
     const wildcard = this.listeners.get("*");
     const all = [...(targeted ?? []), ...(wildcard ?? [])];

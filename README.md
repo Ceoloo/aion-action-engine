@@ -15,7 +15,8 @@ Lifecycle: **Prototype** · Buyer: AION internal first · Success metric: ≥80%
 /packages/events          Structured event bus (action.created → outcome_recorded)
 /packages/scoring         Priority scoring from urgency / stale / intent signals
 /packages/permissions     Role → permission map for humans and agents
-/packages/connectors      Producers → CreateActionInput (Revenue Signal, agent recs)
+/packages/connectors      Producers → CreateActionInput (Revenue Copilot, signals, agent recs)
+/packages/context         Context Pack Builder — hydrate before execute
 /services/action-service  HTTP API + SQLite persistence
 /db/migrations            Schema
 ```
@@ -40,11 +41,43 @@ interface AionTool<TInput, TOutput> {
 | `createAction()` | `POST /v1/actions` |
 | `claimAction()` | `POST /v1/actions/:id/claim` |
 | `approveAction()` | `POST /v1/actions/:id/approve` |
-| `executeAction()` | `POST /v1/actions/:id/execute` |
+| `executeAction()` | `POST /v1/actions/:id/execute` *(builds Context Pack first)* |
 | `completeAction()` | `POST /v1/actions/:id/complete` |
 | `recordOutcome()` | `POST /v1/actions/:id/outcome` |
+| `ingestRevenueCopilotEvent()` | `POST /v1/producers/revenue-copilot/events` |
+| `buildContext()` | `POST /v1/context/build` |
+| `getContextPack()` | `GET /v1/context/:id` |
 
 Headers: `x-aion-actor`, `x-aion-role` (`operator` \| `agent` \| `producer` \| `viewer` \| `admin`), `x-aion-actor-type`.
+
+## Revenue Copilot → Queue
+
+```bash
+curl -X POST http://localhost:8787/v1/producers/revenue-copilot/events \
+  -H 'content-type: application/json' \
+  -H 'x-aion-actor: revenue_copilot' \
+  -H 'x-aion-role: producer' \
+  -d '{
+    "eventType": "application_stalled",
+    "leadId": "lead_302",
+    "leadName": "James",
+    "hoursStale": 48,
+    "confidence": 0.9,
+    "details": ["Missing bank statements"],
+    "draftMessage": "Hi James — quick nudge on the remaining statements."
+  }'
+```
+
+## Context Pack on execute
+
+`POST /v1/actions/:id/execute` now:
+
+1. Builds a Context Pack for the action’s entity (`identity`, `relationship`, `recent_activity`, `open_commitments`, `applicable_playbooks`, `constraints`, …)
+2. Attaches `context_pack_id` to the Action Object
+3. Moves status → `executing`
+4. Returns `{ action, contextPack }`
+
+That is the hydration layer before Agent OS runs the recommended tool.
 
 ## Quick start
 
@@ -80,4 +113,9 @@ Open http://localhost:5173
 
 ## Validation plan
 
-Run AION itself through this queue for 14 days. First producer: **Revenue Copilot**. First consumer: **Operator Console**. Next infrastructure modules on the board: Context Pack Builder, Agent Execution Inspector, Revenue Signal Engine.
+Run AION itself through this queue for 14 days.
+
+- **First producer:** Revenue Copilot (`POST /v1/producers/revenue-copilot/events`)
+- **First consumer:** Operator Console
+- **Hydration:** Context Pack Builder on every execute
+- **Next on the board:** Agent Execution Inspector, richer live connectors (Supabase / GHL / Notion)

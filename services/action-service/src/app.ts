@@ -2,6 +2,10 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createExecutionContext } from "@aion/core";
 import { permissionsForRole, PermissionError } from "@aion/permissions";
+import {
+  revenueCopilotEventToAction,
+  type RevenueCopilotEvent,
+} from "@aion/connectors";
 import type { ActionEngine } from "./engine.js";
 
 function actorFromHeaders(c: {
@@ -23,7 +27,9 @@ export function createApp(engine: ActionEngine) {
   const app = new Hono();
   app.use("*", cors());
 
-  app.get("/health", (c) => c.json({ ok: true, service: "action-service", version: engine.version }));
+  app.get("/health", (c) =>
+    c.json({ ok: true, service: "action-service", version: engine.version })
+  );
 
   app.get("/v1/meta", (c) =>
     c.json({
@@ -40,7 +46,11 @@ export function createApp(engine: ActionEngine) {
         "executeAction",
         "completeAction",
         "recordOutcome",
+        "buildContext",
+        "ingestRevenueCopilotEvent",
       ],
+      producers: ["revenue_copilot"],
+      consumers: ["operator_console", "agent_os"],
     })
   );
 
@@ -58,16 +68,17 @@ export function createApp(engine: ActionEngine) {
     const groups = engine.buckets();
     return c.json({
       buckets: groups,
-      counts: Object.fromEntries(
-        Object.entries(groups).map(([k, v]) => [k, v.length])
-      ),
+      counts: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.length])),
     });
   });
 
   app.get("/v1/actions/:id", (c) => {
     const action = engine.getAction(c.req.param("id"));
     if (!action) return c.json({ error: "Not found" }, 404);
-    return c.json({ action, events: engine.getEvents(action.id) });
+    const contextPack = action.context_pack_id
+      ? engine.getContextPack(action.context_pack_id)
+      : null;
+    return c.json({ action, events: engine.getEvents(action.id), contextPack });
   });
 
   app.post("/v1/actions", async (c) => {
@@ -75,6 +86,30 @@ export function createApp(engine: ActionEngine) {
       const body = await c.req.json();
       const action = await engine.createAction(body, actorFromHeaders(c));
       return c.json({ action }, 201);
+    } catch (err) {
+      return handleError(c, err);
+    }
+  });
+
+  /** Revenue Copilot → Action Queue producer endpoint */
+  app.post("/v1/producers/revenue-copilot/events", async (c) => {
+    try {
+      const body = (await c.req.json()) as RevenueCopilotEvent;
+      if (!body?.eventType || !body?.leadId) {
+        return c.json({ error: "eventType and leadId are required" }, 400);
+      }
+      const ctx = actorFromHeaders(c);
+      const producerCtx =
+        c.req.header("x-aion-role") != null
+          ? ctx
+          : createExecutionContext({
+              actor: c.req.header("x-aion-actor") ?? "revenue_copilot",
+              actorType: "agent",
+              permissions: permissionsForRole("producer"),
+            });
+      const input = revenueCopilotEventToAction(body);
+      const action = await engine.createAction(input, producerCtx);
+      return c.json({ action, producer: "revenue_copilot" }, 201);
     } catch (err) {
       return handleError(c, err);
     }
@@ -113,8 +148,8 @@ export function createApp(engine: ActionEngine) {
 
   app.post("/v1/actions/:id/execute", async (c) => {
     try {
-      const action = await engine.executeAction(c.req.param("id"), actorFromHeaders(c));
-      return c.json({ action });
+      const result = await engine.executeAction(c.req.param("id"), actorFromHeaders(c));
+      return c.json(result);
     } catch (err) {
       return handleError(c, err);
     }
@@ -155,6 +190,32 @@ export function createApp(engine: ActionEngine) {
     } catch (err) {
       return handleError(c, err);
     }
+  });
+
+  app.post("/v1/context/build", async (c) => {
+    try {
+      const body = await c.req.json();
+      const ctx = actorFromHeaders(c);
+      const contextPack = await engine.buildContext(
+        {
+          actor: body.actor ?? ctx.actor,
+          task: body.task,
+          entityType: body.entityType,
+          entityId: body.entityId,
+          actionId: body.actionId,
+        },
+        ctx
+      );
+      return c.json({ contextPack }, 201);
+    } catch (err) {
+      return handleError(c, err);
+    }
+  });
+
+  app.get("/v1/context/:id", (c) => {
+    const contextPack = engine.getContextPack(c.req.param("id"));
+    if (!contextPack) return c.json({ error: "Not found" }, 404);
+    return c.json({ contextPack });
   });
 
   app.get("/v1/events", (c) => {

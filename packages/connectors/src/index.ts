@@ -1,6 +1,5 @@
 /**
- * Producer connectors — thin adapters that emit CreateActionInput payloads.
- * V0 ships stubs that map known AION producers into the Action Queue.
+ * Producer connectors — Revenue Copilot first, then other AION producers.
  */
 import type { CreateActionInput } from "@aion/actions";
 import { scoreAction } from "@aion/scoring";
@@ -52,6 +51,104 @@ export function revenueSignalToAction(signal: RevenueSignal): CreateActionInput 
       payload: { signal: signal.signal, confidence: signal.confidence },
     },
     tags: ["revenue", signal.signal],
+  };
+}
+
+export type RevenueCopilotEventType =
+  | "application_stalled"
+  | "proposal_viewed"
+  | "rate_inquiry"
+  | "urgent_need_detected"
+  | "no_activity"
+  | "payment_approaching"
+  | "high_engagement_no_cta";
+
+export interface RevenueCopilotEvent {
+  eventType: RevenueCopilotEventType;
+  leadId: string;
+  leadName?: string;
+  hoursStale?: number;
+  confidence?: number;
+  details?: string[];
+  draftMessage?: string;
+  revenueImpact?: number;
+}
+
+const EVENT_DEFAULTS: Record<
+  RevenueCopilotEventType,
+  {
+    actionType: CreateActionInput["action_type"];
+    channel: NonNullable<CreateActionInput["suggested_action"]>["channel"];
+    title: (name: string) => string;
+  }
+> = {
+  application_stalled: {
+    actionType: "follow_up",
+    channel: "sms",
+    title: (name) => `Follow up with ${name} about incomplete application`,
+  },
+  proposal_viewed: {
+    actionType: "call",
+    channel: "call",
+    title: (name) => `Call ${name} — proposal viewed repeatedly`,
+  },
+  rate_inquiry: {
+    actionType: "follow_up",
+    channel: "sms",
+    title: (name) => `Educate ${name} on rates`,
+  },
+  urgent_need_detected: {
+    actionType: "call",
+    channel: "call",
+    title: (name) => `Call ${name} immediately — urgent need`,
+  },
+  no_activity: {
+    actionType: "re_engage",
+    channel: "email",
+    title: (name) => `Re-engage ${name} — no activity`,
+  },
+  payment_approaching: {
+    actionType: "follow_up",
+    channel: "email",
+    title: (name) => `Send ROI / renewal summary to ${name}`,
+  },
+  high_engagement_no_cta: {
+    actionType: "call",
+    channel: "call",
+    title: (name) => `Sales opportunity — ${name} engaged without CTA`,
+  },
+};
+
+export function revenueCopilotEventToAction(event: RevenueCopilotEvent): CreateActionInput {
+  const defaults = EVENT_DEFAULTS[event.eventType];
+  const name = event.leadName ?? event.leadId;
+  const confidence = event.confidence ?? 0.8;
+  const priority = scoreAction({
+    urgency:
+      confidence >= 0.85 || event.eventType === "urgent_need_detected" ? "high" : "medium",
+    actionType: defaults.actionType,
+    hoursStale: event.hoursStale,
+    buyingIntent: confidence,
+    revenueImpact: event.revenueImpact,
+    sourceWeight: 3,
+  });
+
+  return {
+    source: "revenue_copilot",
+    entity_type: "lead",
+    entity_id: event.leadId,
+    action_type: defaults.actionType,
+    title: defaults.title(name),
+    reason: (event.details ?? [event.eventType]).join("; "),
+    priority,
+    urgency: priority >= 85 ? "high" : "medium",
+    requires_approval: true,
+    suggested_action: {
+      channel: defaults.channel,
+      message: event.draftMessage,
+      payload: { eventType: event.eventType, confidence },
+    },
+    tags: ["revenue", "revenue_copilot", event.eventType],
   };
 }
 

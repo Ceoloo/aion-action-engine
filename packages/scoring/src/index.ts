@@ -27,10 +27,6 @@ const ACTION_BOOST: Partial<Record<ActionType, number>> = {
   re_engage: 3,
 };
 
-/**
- * Priority scorer for Action Objects (0–100).
- * Producers can pass an explicit priority; this fills gaps from signals.
- */
 export function scoreAction(signals: ScoringSignals): number {
   let score = URGENCY_BASE[signals.urgency ?? "medium"];
 

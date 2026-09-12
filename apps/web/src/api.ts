@@ -39,6 +39,7 @@ export interface ActionObject {
   due_at?: string | null;
   claimed_by?: string | null;
   approved_by?: string | null;
+  context_pack_id?: string | null;
   tags?: string[];
   outcome?: ActionOutcome | null;
 }
@@ -78,7 +79,7 @@ export async function approveAction(id: string, approve = true): Promise<ActionO
 }
 
 export async function executeAction(id: string): Promise<ActionObject> {
-  const data = await parse<{ action: ActionObject }>(
+  const data = await parse<{ action: ActionObject; contextPack?: { id: string } }>(
     await fetch(`/v1/actions/${id}/execute`, {
       method: "POST",
       headers,

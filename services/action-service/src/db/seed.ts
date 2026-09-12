@@ -118,21 +118,10 @@ for (const seed of seeds) {
   await engine.createAction(seed, ctx);
 }
 
-// Mark auto-exec one as automated after approval path (no approval required)
-const automated = engine.listActions().find((a) => a.tags?.includes("automated"));
-if (automated) {
-  await engine.executeAction(automated.id, ctx);
-  // leave in executing then complete partially — better: set via complete after execute
-  // For demo bucket "automated", update status manually through repo after create:
-}
-
-// Re-seed automated bucket properly
+// Mark auto-exec ones as automated for the AUTOMATED bucket demo
 const autoList = engine.listActions().filter((a) => a.tags?.includes("automated"));
 for (const a of autoList) {
-  // execute without approval since requires_approval false
-  const executing = await engine.executeAction(a.id, ctx);
-  // Roll back to automated presentation: store as completed? Brief wants AUTOMATED tab.
-  // Use repo to set status automated for demo.
+  const { action: executing } = await engine.executeAction(a.id, ctx);
   const repo = new ActionRepository(db);
   repo.upsert({ ...executing, status: "automated", updated_at: new Date().toISOString() });
 }

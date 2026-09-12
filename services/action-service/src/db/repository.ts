@@ -1,5 +1,6 @@
 import type { ActionObject, ActionOutcome, SuggestedAction } from "@aion/core";
 import type { ActionEvent } from "@aion/events";
+import type { ContextPack } from "@aion/context";
 import type Database from "better-sqlite3";
 
 interface ActionRow {
@@ -189,5 +190,34 @@ export class ActionRepository {
       actor: r.actor,
       payload: JSON.parse(r.payload_json) as Record<string, unknown>,
     }));
+  }
+
+  upsertContextPack(pack: ContextPack): ContextPack {
+    this.db
+      .prepare(
+        `INSERT INTO context_packs (id, payload_json, created_at)
+         VALUES (@id, @payload_json, @created_at)
+         ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json`
+      )
+      .run({
+        id: pack.id,
+        payload_json: JSON.stringify(pack),
+        created_at: pack.created_at,
+      });
+    return pack;
+  }
+
+  getContextPack(id: string): ContextPack | null {
+    const row = this.db
+      .prepare("SELECT payload_json FROM context_packs WHERE id = ?")
+      .get(id) as { payload_json: string } | undefined;
+    return row ? (JSON.parse(row.payload_json) as ContextPack) : null;
+  }
+
+  listContextPacks(): ContextPack[] {
+    const rows = this.db
+      .prepare("SELECT payload_json FROM context_packs ORDER BY created_at ASC")
+      .all() as Array<{ payload_json: string }>;
+    return rows.map((r) => JSON.parse(r.payload_json) as ContextPack);
   }
 }
