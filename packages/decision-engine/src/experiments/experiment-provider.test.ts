@@ -22,6 +22,16 @@ describe("StaticExperimentProvider", () => {
     assert.equal(p.variant("thresholds", { unit: "tenant-z" }), "control");
     assert.equal(p.variant("other", { unit: "tenant-a" }), undefined);
   });
+
+  it("does not resolve reserved keys/units to inherited object members", () => {
+    const p = new StaticExperimentProvider({
+      assignments: { thresholds: { "tenant-a": "aggressive" } },
+      defaults: { thresholds: "control" },
+    });
+    // Neither a reserved experiment key nor a reserved unit may leak a function.
+    assert.equal(p.variant("constructor", { unit: "tenant-a" }), undefined);
+    assert.equal(p.variant("thresholds", { unit: "toString" }), "control");
+  });
 });
 
 describe("HashExperimentProvider", () => {
@@ -55,6 +65,24 @@ describe("HashExperimentProvider", () => {
 
   it("returns undefined for an unconfigured experiment", () => {
     assert.equal(provider.variant("missing", { unit: "x" }), undefined);
+  });
+
+  it("treats reserved experiment keys as unconfigured, not inherited members", () => {
+    assert.equal(provider.variant("constructor", { unit: "x" }), undefined);
+    assert.equal(provider.variant("__proto__", { unit: "x" }), undefined);
+    assert.equal(provider.variant("toString", { unit: "x" }), undefined);
+  });
+
+  it("rejects an experiment with a non-finite weight instead of collapsing", () => {
+    const bad = new HashExperimentProvider({
+      experiments: {
+        thresholds: [
+          { name: "control", weight: 50 },
+          { name: "aggressive", weight: Number.NaN },
+        ],
+      },
+    });
+    assert.equal(bad.variant("thresholds", { unit: "u1" }), undefined);
   });
 
   it("hashUnitInterval is deterministic and in [0,1)", () => {
@@ -145,8 +173,29 @@ describe("evaluateShadowByVariant", () => {
       rec("aggressive", true, false),
       rec("control", true, true),
     ]);
-    assert.equal(report.aggressive!.scored, 2);
-    assert.equal(report.aggressive!.accuracy, 0.5);
-    assert.equal(report.control!.accuracy, 1);
+    assert.equal(report["thresholds :: aggressive"]!.scored, 2);
+    assert.equal(report["thresholds :: aggressive"]!.accuracy, 0.5);
+    assert.equal(report["thresholds :: control"]!.accuracy, 1);
+  });
+
+  it("does not pool a shared variant name across different experiments", () => {
+    const rec = (experimentKey: string, truth: boolean): DecisionRecord => ({
+      decisionId: `dec_${experimentKey}_${truth}`,
+      provider: "rules",
+      stateHash: "h",
+      decisionType: "binary",
+      questionId: "q",
+      selectedChoice: true,
+      confidence: 0.9,
+      route: "llm_verify",
+      createdAt: new Date().toISOString(),
+      experimentKey,
+      variant: "control",
+      groundTruth: truth,
+    });
+    // Two experiments, both with a "control" arm — must stay separate.
+    const report = evaluateShadowByVariant([rec("exp_a", true), rec("exp_b", false)]);
+    assert.equal(report["exp_a :: control"]!.accuracy, 1);
+    assert.equal(report["exp_b :: control"]!.accuracy, 0);
   });
 });

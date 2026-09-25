@@ -78,6 +78,10 @@ export function approvalProbability(features: {
 export function actionDecisionState(action: ActionObject): DecisionState {
   return {
     features: {
+      // The action id is a stable, non-PII key — it is the experiment bucketing
+      // unit (see buildApprovalDecisionEngine) so a weighted experiment actually
+      // splits per action instead of collapsing every action onto "global".
+      id: action.id,
       priority: action.priority,
       urgency: action.urgency,
       action_type: action.action_type,
@@ -92,6 +96,8 @@ export interface ExperimentConfig {
   provider: ExperimentProvider;
   key: string;
   variants: Record<string, Partial<ThresholdPolicy>>;
+  /** Derive the bucketing unit; defaults to the action id (stable, non-PII). */
+  unitFrom?: (state: DecisionState) => string;
 }
 
 export interface ShadowRecorderOptions {
@@ -101,6 +107,18 @@ export interface ShadowRecorderOptions {
   experiment?: ExperimentConfig;
   /** Injectable ISO clock for deterministic tests. */
   isoNow?: () => string;
+  /**
+   * Retention bound for the in-memory ledger (default 5000). The oldest record
+   * is evicted once the bound is exceeded so a long-running service cannot grow
+   * the ledger — or the cost of a report traversal — without limit.
+   */
+  maxRecords?: number;
+}
+
+/** Stable, non-PII bucketing unit: the action id, else "global". */
+function actionUnit(state: DecisionState): string {
+  const id = state.features.id;
+  return typeof id === "string" && id.length > 0 ? id : "global";
 }
 
 /** Build the approval DecisionEngine backed by the deterministic rules provider. */
@@ -117,7 +135,14 @@ export function buildApprovalDecisionEngine(
       modelVersion: "approval-rules-v1",
     }),
     ...(options.policy ? { policy: options.policy } : {}),
-    ...(options.experiment ? { experiment: options.experiment } : {}),
+    ...(options.experiment
+      ? {
+          experiment: {
+            ...options.experiment,
+            unitFrom: options.experiment.unitFrom ?? actionUnit,
+          },
+        }
+      : {}),
     ...(options.isoNow ? { isoNow: options.isoNow } : {}),
     ...(onRecord ? { onRecord } : {}),
   });
@@ -129,12 +154,19 @@ export function buildApprovalDecisionEngine(
  * (A durable ledger — a decisions table or a PostHog stream — is a later step;
  * the port here stays the same.)
  */
+const DEFAULT_MAX_RECORDS = 5000;
+
 export class ShadowDecisionRecorder {
   private readonly engine: DecisionEngine;
   private readonly byAction = new Map<string, DecisionRecord>();
+  private readonly maxRecords: number;
 
   constructor(private readonly options: ShadowRecorderOptions = {}) {
     this.engine = buildApprovalDecisionEngine(options);
+    this.maxRecords =
+      options.maxRecords && options.maxRecords > 0
+        ? options.maxRecords
+        : DEFAULT_MAX_RECORDS;
   }
 
   /**
@@ -144,15 +176,34 @@ export class ShadowDecisionRecorder {
    */
   async observe(action: ActionObject): Promise<DecisionRecord | null> {
     try {
-      const { record } = await this.engine.decide(
+      const { result, record } = await this.engine.decide(
         actionDecisionState(action),
         APPROVE_QUESTION,
         { mode: "shadow", risk: "R1" },
       );
-      this.byAction.set(action.id, record);
-      return record;
+      // The question is "auto-approve?"; a confident `false` means "needs a
+      // human", so it must never count as an autonomous route. Confidence-based
+      // routing alone can't tell YES from NO, so pin a NO prediction to the
+      // human path — otherwise autoRoute / false-automation metrics would credit
+      // a confident rejection as an auto-execution.
+      const routed: DecisionRecord =
+        result.kind === "binary" && result.choice === false
+          ? { ...record, route: "human_approval" }
+          : record;
+      this.byAction.set(action.id, routed);
+      this.evictIfNeeded();
+      return routed;
     } catch {
       return null;
+    }
+  }
+
+  /** Drop the oldest record(s) once the retention bound is exceeded (FIFO). */
+  private evictIfNeeded(): void {
+    while (this.byAction.size > this.maxRecords) {
+      const oldest = this.byAction.keys().next().value;
+      if (oldest === undefined) break;
+      this.byAction.delete(oldest);
     }
   }
 

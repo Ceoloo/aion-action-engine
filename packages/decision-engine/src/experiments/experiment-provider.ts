@@ -26,6 +26,16 @@ export interface ExperimentProvider {
 }
 
 /**
+ * Own-property lookup. Experiment keys, units, and variant names are strings
+ * from config or runtime state, so a reserved name ("__proto__", "constructor",
+ * "toString") must resolve to a configured value or nothing — never an inherited
+ * member of a plain object.
+ */
+function own<T>(obj: Record<string, T>, key: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
+}
+
+/**
  * Fixed-assignment provider: explicit unit→variant maps, with an optional
  * default variant per experiment. Deterministic and dependency-free — ideal for
  * tests and hand-pinned rollouts.
@@ -47,10 +57,9 @@ export class StaticExperimentProvider implements ExperimentProvider {
   }
 
   variant(experimentKey: string, context: ExperimentContext): string | undefined {
-    return (
-      this.assignments[experimentKey]?.[context.unit] ??
-      this.defaults[experimentKey]
-    );
+    const perUnit = own(this.assignments, experimentKey);
+    const assigned = perUnit ? own(perUnit, context.unit) : undefined;
+    return assigned ?? own(this.defaults, experimentKey);
   }
 }
 
@@ -78,9 +87,16 @@ export class HashExperimentProvider implements ExperimentProvider {
   }
 
   variant(experimentKey: string, context: ExperimentContext): string | undefined {
-    const variants = this.experiments[experimentKey];
+    const variants = own(this.experiments, experimentKey);
     if (!variants || variants.length === 0) return undefined;
-    const total = variants.reduce((sum, v) => sum + Math.max(0, v.weight), 0);
+    // A non-finite weight (NaN/±Infinity) would poison the split — with a NaN
+    // total every `point < acc` check fails and every unit collapses onto the
+    // last variant. Treat such a misconfigured experiment as "no assignment".
+    let total = 0;
+    for (const v of variants) {
+      if (!Number.isFinite(v.weight)) return undefined;
+      total += Math.max(0, v.weight);
+    }
     if (total <= 0) return undefined;
     const point = hashUnitInterval(`${experimentKey}:${context.unit}`) * total;
     let acc = 0;

@@ -108,12 +108,14 @@ export class ActionEngine implements AionTool<CreateActionInput, ActionObject> {
   ): Promise<ActionObject> {
     assertPermission(ctx, "actions:approve");
     const current = this.require(actionId);
-    // Shadow the decision on the PRE-approval state (predicting the human),
-    // then apply the human decision and settle it as ground truth. The shadow
-    // path is fully decoupled: it never changes the action's outcome.
-    await this.recorder?.observe(current);
+    // Apply and persist the human decision FIRST; only then shadow it. If the
+    // transition is invalid or persistence throws we never record a phantom
+    // decision. `current` is the captured pre-approval state, so the shadow
+    // still predicts the human on the state they decided from. The shadow path
+    // is fully decoupled and never changes the action's outcome.
     const next = approveAction(current, approvedBy, approve);
     const persisted = await this.persistTransition(next, ctx.actor);
+    await this.recorder?.observe(current);
     this.recorder?.settle(actionId, approve, approvedBy);
     return persisted;
   }

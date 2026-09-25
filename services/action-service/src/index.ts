@@ -9,6 +9,10 @@ const db = openDb();
 migrate(db);
 // Shadow-mode Decision Plane runs beside the approval gate (ADR-010 Phase 2):
 // it records what auto-approve would have decided, never acting on it.
+// The routing-threshold experiment is opt-in: with no `experiment` configured
+// the recorder runs a single control arm (byVariant reports "(none) :: (control)").
+// Pass ShadowRecorderOptions.experiment { provider, key, variants } to enroll
+// actions into a threshold experiment once one is defined for this service.
 const recorder = new ShadowDecisionRecorder();
 const engine = new ActionEngine(
   new ActionRepository(db),
