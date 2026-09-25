@@ -90,7 +90,20 @@ export {
   type ShadowReport,
   type EvaluateShadowOptions,
   evaluateShadow,
+  evaluateShadowByVariant,
 } from './evals/calibration.js';
+
+// Experiments
+export {
+  type ExperimentProvider,
+  type ExperimentContext,
+  StaticExperimentProvider,
+  type StaticExperimentConfig,
+  HashExperimentProvider,
+  type HashExperimentConfig,
+  type VariantWeight,
+  hashUnitInterval,
+} from './experiments/experiment-provider.js';
 
 // Engine façade
 export {

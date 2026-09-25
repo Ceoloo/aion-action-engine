@@ -160,3 +160,32 @@ function percentile(sorted: number[], q: number): number | undefined {
   );
   return sorted[idx];
 }
+
+/**
+ * Segment a batch of records by experiment and run {@link evaluateShadow} on
+ * each group. This is how an experiment over routing thresholds becomes
+ * measurable: compare accuracy / calibration / false-automation across arms.
+ *
+ * Records are keyed by BOTH `experimentKey` and `variant` (`"<key> :: <variant>"`)
+ * so records from different experiments that happen to share a variant name
+ * (e.g. "control") are never pooled — pooling them would make the per-arm
+ * metrics describe neither experiment. A record with no experiment key falls
+ * under "(none)"; one with no variant under "(control)". Both grouping maps use
+ * a null prototype so reserved variant names ("__proto__", "constructor") are
+ * ordinary keys, not inherited members that would corrupt the grouping.
+ */
+export function evaluateShadowByVariant(
+  records: DecisionRecord[],
+  options: EvaluateShadowOptions = {},
+): Record<string, ShadowReport> {
+  const groups: Record<string, DecisionRecord[]> = Object.create(null);
+  for (const record of records) {
+    const key = `${record.experimentKey ?? "(none)"} :: ${record.variant ?? "(control)"}`;
+    (groups[key] ??= []).push(record);
+  }
+  const out: Record<string, ShadowReport> = Object.create(null);
+  for (const key of Object.keys(groups)) {
+    out[key] = evaluateShadow(groups[key]!, options);
+  }
+  return out;
+}

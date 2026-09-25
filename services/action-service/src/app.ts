@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createExecutionContext } from "@aion/core";
-import { permissionsForRole, PermissionError } from "@aion/permissions";
+import { permissionsForRole, PermissionError, assertPermission } from "@aion/permissions";
 import {
   revenueCopilotEventToAction,
   type RevenueCopilotEvent,
@@ -221,6 +221,34 @@ export function createApp(engine: ActionEngine) {
   app.get("/v1/events", (c) => {
     const actionId = c.req.query("actionId");
     return c.json({ events: engine.getEvents(actionId) });
+  });
+
+  /**
+   * Decision Plane (shadow) — read-only. What auto-approve WOULD have decided at
+   * the approval gate, scored against the human's actual decision. Never acts.
+   * The ledger carries the deciding human (humanOverride.by), so both routes
+   * require an authenticated reader with `actions:read`.
+   */
+  app.get("/v1/decisions", (c) => {
+    try {
+      assertPermission(actorFromHeaders(c), "actions:read");
+      return c.json({ mode: "shadow", records: engine.shadowRecords() });
+    } catch (err) {
+      return handleError(c, err);
+    }
+  });
+
+  app.get("/v1/decisions/shadow/report", (c) => {
+    try {
+      assertPermission(actorFromHeaders(c), "actions:read");
+      const byVariant = c.req.query("byVariant");
+      if (byVariant === "true") {
+        return c.json({ mode: "shadow", byVariant: engine.shadowReportByVariant() });
+      }
+      return c.json({ mode: "shadow", report: engine.shadowReport() });
+    } catch (err) {
+      return handleError(c, err);
+    }
   });
 
   return app;

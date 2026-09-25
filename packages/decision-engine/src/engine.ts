@@ -16,6 +16,7 @@ import {
   hashState,
   type DecisionRecord,
 } from './telemetry/decision-record.js';
+import type { ExperimentProvider } from './experiments/experiment-provider.js';
 
 /**
  * DecisionEngine — the façade an agent or app calls.
@@ -35,6 +36,22 @@ export interface DecisionEngineOptions {
   now?: () => number;
   /** Injectable ISO timestamp for records. */
   isoNow?: () => string;
+  /**
+   * Optional experiment over routing thresholds. When set, each decision is
+   * assigned a variant (bucketed by `unitFrom`; default tenantId ?? missionId ??
+   * "global"), the variant's threshold overrides are merged onto `policy`, and
+   * the DecisionRecord is tagged with { experimentKey, variant } so the shadow
+   * evaluator can measure each variant separately. The plane still never
+   * executes — this only tunes which route a confidence lands on.
+   */
+  experiment?: {
+    provider: ExperimentProvider;
+    key: string;
+    /** variant name -> threshold overrides merged onto the base policy. */
+    variants: Record<string, Partial<ThresholdPolicy>>;
+    /** Derive the bucketing unit; must be a stable non-PII id. */
+    unitFrom?: (state: DecisionState, options: DecideOptions) => string;
+  };
 }
 
 export interface DecideOptions {
@@ -91,13 +108,36 @@ export class DecisionEngine {
     const mode = options.mode ?? 'live';
     const stateHash = hashState(state);
 
+    // Resolve the experiment variant + effective policy once per call. Variant
+    // assignment is sticky per bucketing unit and never carries PII.
+    const experiment = this.options.experiment;
+    let variant: string | undefined;
+    let effectivePolicy = this.options.policy;
+    if (experiment) {
+      const tenantId = options.tenantId ?? state.tenantId;
+      const unit =
+        experiment.unitFrom?.(state, options) ??
+        tenantId ??
+        options.missionId ??
+        state.missionId ??
+        'global';
+      variant = experiment.provider.variant(experiment.key, {
+        unit,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+      });
+      const overrides = variant ? experiment.variants[variant] : undefined;
+      if (overrides) {
+        effectivePolicy = { ...(this.options.policy ?? {}), ...overrides };
+      }
+    }
+
     return questions.map((question, i) => {
       const result = results[i]!;
       assertResultValid(question, result);
       const route = routeDecision({
         confidence: result.confidence,
         risk,
-        ...(this.options.policy ? { policy: this.options.policy } : {}),
+        ...(effectivePolicy ? { policy: effectivePolicy } : {}),
       });
       const record = createDecisionRecord({
         question,
@@ -115,6 +155,8 @@ export class DecisionEngine {
         ...(route.threshold !== undefined
           ? { policyThreshold: route.threshold }
           : {}),
+        ...(experiment ? { experimentKey: experiment.key } : {}),
+        ...(variant !== undefined ? { variant } : {}),
         ...(options.missionId !== undefined
           ? { missionId: options.missionId }
           : {}),

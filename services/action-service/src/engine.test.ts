@@ -8,6 +8,7 @@ import { permissionsForRole } from "@aion/permissions";
 import { migrate, openDb } from "./db/client.js";
 import { ActionRepository } from "./db/repository.js";
 import { ActionEngine } from "./engine.js";
+import { ShadowDecisionRecorder } from "./decision/shadow.js";
 import { createApp } from "./app.js";
 
 describe("action-service", () => {
@@ -66,6 +67,62 @@ describe("action-service", () => {
 
     const done = await engine.complete(action.id, "completed", ctx);
     assert.equal(done.status, "completed");
+  });
+
+  it("shadows the approval decision without changing the outcome", async () => {
+    const dbPath = path.join(os.tmpdir(), `aion-actions-shadow-${Date.now()}.db`);
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+    const shadowDb = openDb(dbPath);
+    migrate(shadowDb);
+    const recorder = new ShadowDecisionRecorder();
+    const shadowEngine = new ActionEngine(
+      new ActionRepository(shadowDb),
+      undefined,
+      undefined,
+      recorder
+    );
+    const ctx = createExecutionContext({
+      actor: "test",
+      actorType: "system",
+      permissions: permissionsForRole("admin"),
+    });
+
+    const created = await shadowEngine.createAction(
+      {
+        source: "revenue_copilot",
+        entity_type: "lead",
+        entity_id: "lead_501",
+        action_type: "follow_up",
+        title: "Follow up on proposal",
+        reason: "high engagement",
+        priority: 95,
+        urgency: "low",
+        requires_approval: true,
+      },
+      ctx
+    );
+
+    const approved = await shadowEngine.approve(created.id, "ceo", true, ctx);
+    assert.equal(approved.status, "approved"); // outcome unchanged by the shadow
+
+    // The Decision Plane recorded what auto-approve WOULD have decided, scored
+    // against the human's approve. It never executed or gated anything.
+    const record = recorder.recordFor(created.id);
+    assert.ok(record);
+    assert.equal(record!.executionResult, "shadow");
+    assert.equal(record!.selectedChoice, true); // high priority, low urgency
+    assert.equal(record!.groundTruth, true); // the human approved
+
+    const report = shadowEngine.shadowReport();
+    assert.ok(report);
+    assert.equal(report!.scored, 1);
+    assert.equal(report!.accuracy, 1);
+  });
+
+  it("leaves behaviour unchanged when no recorder is wired", async () => {
+    // The default engine in this suite has no recorder.
+    assert.deepEqual(engine.shadowRecords(), []);
+    assert.equal(engine.shadowReport(), null);
   });
 
   it("ingests Revenue Copilot events into the queue", async () => {

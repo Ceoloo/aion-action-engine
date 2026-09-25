@@ -173,6 +173,9 @@ importers:
       '@aion/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@aion/decision-engine':
+        specifier: workspace:*
+        version: link:../../packages/decision-engine
       '@aion/events':
         specifier: workspace:*
         version: link:../../packages/events
