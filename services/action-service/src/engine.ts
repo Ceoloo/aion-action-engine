@@ -17,7 +17,9 @@ import { ActionEventEmitter, actionEventDefinitions, statusToEventName } from "@
 import { assertPermission } from "@aion/permissions";
 import { ContextPackBuilder, type ContextPack } from "@aion/context";
 import type { AionTool } from "@aion/core";
+import type { DecisionRecord, ShadowReport } from "@aion/decision-engine";
 import type { ActionRepository } from "./db/repository.js";
+import { ShadowDecisionRecorder } from "./decision/shadow.js";
 
 export class ActionEngine implements AionTool<CreateActionInput, ActionObject> {
   readonly name = "aion.action_queue";
@@ -38,13 +40,22 @@ export class ActionEngine implements AionTool<CreateActionInput, ActionObject> {
   readonly outputSchema = actionOutputSchema;
 
   readonly contextBuilder: ContextPackBuilder;
+  /**
+   * Optional shadow-mode Decision Plane (ADR-010 Phase 2). When present it
+   * observes the approval gate and records what auto-approve *would* have
+   * decided, with the human decision as ground truth. It never gates or
+   * executes — a null recorder leaves behaviour unchanged.
+   */
+  private readonly recorder?: ShadowDecisionRecorder;
 
   constructor(
     private readonly repo: ActionRepository,
     private readonly bus = new ActionEventEmitter(),
-    contextBuilder?: ContextPackBuilder
+    contextBuilder?: ContextPackBuilder,
+    recorder?: ShadowDecisionRecorder
   ) {
     this.contextBuilder = contextBuilder ?? new ContextPackBuilder();
+    this.recorder = recorder;
     this.bus.on("*", async (event) => {
       this.repo.insertEvent(event);
     });
@@ -97,8 +108,32 @@ export class ActionEngine implements AionTool<CreateActionInput, ActionObject> {
   ): Promise<ActionObject> {
     assertPermission(ctx, "actions:approve");
     const current = this.require(actionId);
+    // Shadow the decision on the PRE-approval state (predicting the human),
+    // then apply the human decision and settle it as ground truth. The shadow
+    // path is fully decoupled: it never changes the action's outcome.
+    await this.recorder?.observe(current);
     const next = approveAction(current, approvedBy, approve);
-    return this.persistTransition(next, ctx.actor);
+    const persisted = await this.persistTransition(next, ctx.actor);
+    this.recorder?.settle(actionId, approve, approvedBy);
+    return persisted;
+  }
+
+  // ── Decision Plane (shadow) read surface ─────────────────────────────────
+  // Empty/absent when no recorder is wired, so callers need no null-checks.
+
+  /** Shadow decision records captured at the approval gate. */
+  shadowRecords(): DecisionRecord[] {
+    return this.recorder?.records() ?? [];
+  }
+
+  /** Calibration report over shadow records with known ground truth. */
+  shadowReport(): ShadowReport | null {
+    return this.recorder?.report() ?? null;
+  }
+
+  /** Shadow calibration report segmented by experiment variant. */
+  shadowReportByVariant(): Record<string, ShadowReport> {
+    return this.recorder?.reportByVariant() ?? {};
   }
 
   async executeAction(

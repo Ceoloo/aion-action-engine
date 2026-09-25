@@ -18,6 +18,7 @@
     "@aion/connectors": "workspace:*",
     "@aion/context": "workspace:*",
     "@aion/core": "workspace:*",
+    "@aion/decision-engine": "workspace:*",
     "@aion/events": "workspace:*",
     "@aion/permissions": "workspace:*",
     "@aion/scoring": "workspace:*",

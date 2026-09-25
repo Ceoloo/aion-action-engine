@@ -223,6 +223,22 @@ export function createApp(engine: ActionEngine) {
     return c.json({ events: engine.getEvents(actionId) });
   });
 
+  /**
+   * Decision Plane (shadow) — read-only. What auto-approve WOULD have decided at
+   * the approval gate, scored against the human's actual decision. Never acts.
+   */
+  app.get("/v1/decisions", (c) =>
+    c.json({ mode: "shadow", records: engine.shadowRecords() })
+  );
+
+  app.get("/v1/decisions/shadow/report", (c) => {
+    const byVariant = c.req.query("byVariant");
+    if (byVariant === "true") {
+      return c.json({ mode: "shadow", byVariant: engine.shadowReportByVariant() });
+    }
+    return c.json({ mode: "shadow", report: engine.shadowReport() });
+  });
+
   return app;
 }
 
