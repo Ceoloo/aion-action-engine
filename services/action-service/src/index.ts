@@ -3,6 +3,7 @@ import { migrate, openDb } from "./db/client.js";
 import { ActionRepository } from "./db/repository.js";
 import { ActionEngine } from "./engine.js";
 import { ShadowDecisionRecorder } from "./decision/shadow.js";
+import { createDecisionAnalyticsSink } from "./decision/posthog-client.js";
 import { createApp } from "./app.js";
 
 const db = openDb();
@@ -13,7 +14,12 @@ migrate(db);
 // the recorder runs a single control arm (byVariant reports "(none) :: (control)").
 // Pass ShadowRecorderOptions.experiment { provider, key, variants } to enroll
 // actions into a threshold experiment once one is defined for this service.
-const recorder = new ShadowDecisionRecorder();
+//
+// Phase 3: shadow records stream to the analytics plane via the injected sink.
+// With no server-side POSTHOG_API_KEY the sink is a no-op (no client, no
+// requests) — the same safe default as the Revenue Copilot Phase-1 wiring.
+const analyticsSink = createDecisionAnalyticsSink();
+const recorder = new ShadowDecisionRecorder({ sink: analyticsSink });
 const engine = new ActionEngine(
   new ActionRepository(db),
   undefined,
@@ -24,6 +30,22 @@ const app = createApp(engine);
 
 const port = Number(process.env.PORT ?? 8787);
 
-serve({ fetch: app.fetch, port }, (info) => {
+const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`AION Action Service listening on http://localhost:${info.port}`);
 });
+
+// Graceful shutdown: stop accepting new requests and let in-flight approvals
+// finish FIRST, then flush analytics (so their decision events are captured),
+// then exit. Flushing before draining could cut off a request whose decision
+// event lands after the flush.
+let shuttingDown = false;
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Received ${signal}, draining requests then flushing analytics…`);
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await recorder.flush();
+  process.exit(0);
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));

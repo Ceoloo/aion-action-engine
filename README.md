@@ -91,6 +91,28 @@ pnpm dev          # API :8787 + web :5173
 
 Open http://localhost:5173
 
+## Decision Plane (shadow) & analytics
+
+The action service runs `@aion/decision-engine` in **shadow mode** at the
+approval gate: for every action it records what auto-approve *would* have
+decided, with the human's approve/reject as ground truth. It never gates or
+executes. Read the calibration ledger at:
+
+- `GET /v1/decisions` — the shadow records (requires `actions:read`)
+- `GET /v1/decisions/shadow/report[?byVariant=true]` — calibration report
+
+**Analytics streaming (ADR-010 Phase 3)** is off by default. Set the
+**server-side** PostHog key to stream shadow records to the analytics plane
+(this is the `POSTHOG_API_KEY` project key, never the browser `NEXT_PUBLIC_*`
+key). No key ⇒ a no-op sink: no client, no requests. Only non-PII decision
+metadata is sent — never the deciding human.
+
+| env var | default | purpose |
+| --- | --- | --- |
+| `POSTHOG_API_KEY` | _(unset ⇒ disabled)_ | server-side PostHog project key |
+| `POSTHOG_HOST` | `https://us.i.posthog.com` | ingest host (use the EU host for EU) |
+| `POSTHOG_DECISION_DISTINCT_ID` | `aion-action-service` | distinct id for the emitted events |
+
 ## Action Object
 
 ```json
