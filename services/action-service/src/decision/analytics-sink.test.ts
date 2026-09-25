@@ -134,6 +134,36 @@ describe("ShadowDecisionRecorder → sink", () => {
     assert.deepEqual(events, ["recorded", "settled"]);
   });
 
+  it("isolates a throwing sink from the recorder's control path", async () => {
+    const throwingSink: DecisionAnalyticsSink = {
+      recorded: () => {
+        throw new Error("sink boom");
+      },
+      settled: () => {
+        throw new Error("sink boom");
+      },
+      flush: async () => {},
+    };
+    const rec = new ShadowDecisionRecorder({ sink: throwingSink });
+    const a = normalizeCreateInput({
+      source: "revenue_copilot",
+      entity_type: "lead",
+      entity_id: "lead_3",
+      action_type: "follow_up",
+      title: "Follow up",
+      reason: "test",
+      priority: 95,
+      urgency: "low",
+    });
+    // observe still returns the stored record (not null) despite the sink throwing.
+    const record = await rec.observe(a);
+    assert.ok(record);
+    assert.equal(rec.records().length, 1);
+    // settle (runs in the approval control path) must not throw either.
+    assert.doesNotThrow(() => rec.settle(a.id, true, "ceo"));
+    assert.equal(rec.recordFor(a.id)!.groundTruth, true);
+  });
+
   it("defaults to the no-op sink (no analytics configured)", async () => {
     const rec = new ShadowDecisionRecorder(); // no sink
     const action = normalizeCreateInput({

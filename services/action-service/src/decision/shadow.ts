@@ -204,10 +204,21 @@ export class ShadowDecisionRecorder {
           : record;
       this.byAction.set(action.id, routed);
       this.evictIfNeeded();
-      this.sink.recorded(routed); // stream to the analytics plane (never throws in)
+      // Emit AFTER the record is stored, isolated: a throwing sink must not make
+      // observe report failure (return null) for a decision that was recorded.
+      this.emit(() => this.sink.recorded(routed));
       return routed;
     } catch {
       return null;
+    }
+  }
+
+  /** Run an analytics emission, swallowing any fault — it never affects control. */
+  private emit(op: () => void): void {
+    try {
+      op();
+    } catch {
+      /* the analytics plane is beside the control plane, never in it */
     }
   }
 
@@ -240,7 +251,9 @@ export class ShadowDecisionRecorder {
       },
     };
     this.byAction.set(actionId, settled);
-    this.sink.settled(settled); // ground truth known → stream it (never throws in)
+    // Isolated: settle() runs in the approval control path (engine.approve), so a
+    // throwing sink must never surface as an approval failure.
+    this.emit(() => this.sink.settled(settled));
   }
 
   /** Flush any buffered analytics events; best-effort, called on shutdown. */

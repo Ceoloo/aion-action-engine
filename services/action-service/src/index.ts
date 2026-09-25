@@ -34,14 +34,17 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`AION Action Service listening on http://localhost:${info.port}`);
 });
 
-// Flush buffered analytics on shutdown so the last decisions are not lost.
+// Graceful shutdown: stop accepting new requests and let in-flight approvals
+// finish FIRST, then flush analytics (so their decision events are captured),
+// then exit. Flushing before draining could cut off a request whose decision
+// event lands after the flush.
 let shuttingDown = false;
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`Received ${signal}, flushing analytics and shutting down…`);
+  console.log(`Received ${signal}, draining requests then flushing analytics…`);
+  await new Promise<void>((resolve) => server.close(() => resolve()));
   await recorder.flush();
-  server.close();
   process.exit(0);
 }
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
