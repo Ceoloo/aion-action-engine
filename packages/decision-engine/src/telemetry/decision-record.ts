@@ -41,6 +41,10 @@ export interface DecisionRecord {
   route: DecisionRoute;
   /** Threshold that produced the route, when applicable. */
   policyThreshold?: number;
+  /** Experiment this decision was routed under, if any (calibration by variant). */
+  experimentKey?: string;
+  /** Assigned experiment variant, if any. */
+  variant?: string;
   executionResult?: DecisionExecutionResult;
   humanOverride?: {
     choice: string | number | boolean;
@@ -68,6 +72,8 @@ export interface CreateDecisionRecordInput {
   modelVersion?: string;
   risk?: RiskLevel;
   policyThreshold?: number;
+  experimentKey?: string;
+  variant?: string;
   executionResult?: DecisionExecutionResult;
   latencyMs?: number;
   cost?: number;
@@ -103,6 +109,8 @@ export function createDecisionRecord(
   if (result.kind === 'binary') record.probabilities = result.probabilities;
   if (input.risk !== undefined) record.risk = input.risk;
   if (input.policyThreshold !== undefined) record.policyThreshold = input.policyThreshold;
+  if (input.experimentKey !== undefined) record.experimentKey = input.experimentKey;
+  if (input.variant !== undefined) record.variant = input.variant;
   if (input.executionResult !== undefined) record.executionResult = input.executionResult;
   if (input.latencyMs !== undefined) record.latencyMs = input.latencyMs;
   if (input.cost !== undefined) record.cost = input.cost;

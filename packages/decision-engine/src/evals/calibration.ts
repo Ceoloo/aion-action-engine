@@ -160,3 +160,25 @@ function percentile(sorted: number[], q: number): number | undefined {
   );
   return sorted[idx];
 }
+
+/**
+ * Segment a batch of records by their experiment `variant` and run
+ * {@link evaluateShadow} on each group. This is how an experiment over routing
+ * thresholds becomes measurable: compare accuracy / calibration / false-
+ * automation across variants. Records with no variant fall under "(control)".
+ */
+export function evaluateShadowByVariant(
+  records: DecisionRecord[],
+  options: EvaluateShadowOptions = {},
+): Record<string, ShadowReport> {
+  const groups: Record<string, DecisionRecord[]> = {};
+  for (const record of records) {
+    const key = record.variant ?? "(control)";
+    (groups[key] ??= []).push(record);
+  }
+  const out: Record<string, ShadowReport> = {};
+  for (const [key, group] of Object.entries(groups)) {
+    out[key] = evaluateShadow(group, options);
+  }
+  return out;
+}
