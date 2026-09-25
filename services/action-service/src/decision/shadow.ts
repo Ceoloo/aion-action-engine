@@ -11,6 +11,10 @@ import {
   type ShadowReport,
   type ThresholdPolicy,
 } from "@aion/decision-engine";
+import {
+  noopDecisionAnalyticsSink,
+  type DecisionAnalyticsSink,
+} from "./analytics-sink.js";
 
 /**
  * Shadow-mode Decision Plane for the action queue (ADR-010 Phase 2).
@@ -113,6 +117,12 @@ export interface ShadowRecorderOptions {
    * the ledger — or the cost of a report traversal — without limit.
    */
   maxRecords?: number;
+  /**
+   * Analytics sink for streaming records to the analytics plane (ADR-010
+   * Phase 3). Defaults to a no-op; a PostHog-backed sink is injected at the
+   * composition root. Emission never affects the approval outcome.
+   */
+  sink?: DecisionAnalyticsSink;
 }
 
 /** Stable, non-PII bucketing unit: the action id, else "global". */
@@ -160,6 +170,7 @@ export class ShadowDecisionRecorder {
   private readonly engine: DecisionEngine;
   private readonly byAction = new Map<string, DecisionRecord>();
   private readonly maxRecords: number;
+  private readonly sink: DecisionAnalyticsSink;
 
   constructor(private readonly options: ShadowRecorderOptions = {}) {
     this.engine = buildApprovalDecisionEngine(options);
@@ -167,6 +178,7 @@ export class ShadowDecisionRecorder {
       options.maxRecords && options.maxRecords > 0
         ? options.maxRecords
         : DEFAULT_MAX_RECORDS;
+    this.sink = options.sink ?? noopDecisionAnalyticsSink;
   }
 
   /**
@@ -192,6 +204,7 @@ export class ShadowDecisionRecorder {
           : record;
       this.byAction.set(action.id, routed);
       this.evictIfNeeded();
+      this.sink.recorded(routed); // stream to the analytics plane (never throws in)
       return routed;
     } catch {
       return null;
@@ -227,6 +240,12 @@ export class ShadowDecisionRecorder {
       },
     };
     this.byAction.set(actionId, settled);
+    this.sink.settled(settled); // ground truth known → stream it (never throws in)
+  }
+
+  /** Flush any buffered analytics events; best-effort, called on shutdown. */
+  async flush(): Promise<void> {
+    await this.sink.flush();
   }
 
   /** All shadow records captured so far (newest insertion order). */
