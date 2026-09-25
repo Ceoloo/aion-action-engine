@@ -1,0 +1,25 @@
+{
+  "name": "@aion/decision-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AION Decision Plane — vendor-neutral System-One judgments (route/score/verify) with confidence policy, decision records, and shadow-mode calibration.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
