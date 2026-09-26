@@ -17,7 +17,7 @@
     "test": "node --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
-    "@aion/core": "workspace:*"
+    "@aion/action-core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.2",

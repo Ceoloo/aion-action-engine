@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createExecutionContext } from "@aion/core";
+import { createExecutionContext } from "@aion/action-core";
 import { permissionsForRole } from "@aion/permissions";
 import { migrate, openDb } from "./db/client.js";
 import { ActionRepository } from "./db/repository.js";

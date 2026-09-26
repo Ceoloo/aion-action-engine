@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { ActionEventEmitter } from "./index.js";
-import type { ActionObject } from "@aion/core";
+import type { ActionObject } from "@aion/action-core";
 
 const sample: ActionObject = {
   id: "act_01",

@@ -1,4 +1,4 @@
-import type { ActionObject, ActionOutcome, ExecutionContext, Permission } from "@aion/core";
+import type { ActionObject, ActionOutcome, ExecutionContext, Permission } from "@aion/action-core";
 import {
   approveAction,
   attachContextPack,
@@ -16,7 +16,7 @@ import {
 import { ActionEventEmitter, actionEventDefinitions, statusToEventName } from "@aion/events";
 import { assertPermission } from "@aion/permissions";
 import { ContextPackBuilder, type ContextPack } from "@aion/context";
-import type { AionTool } from "@aion/core";
+import type { AionTool } from "@aion/action-core";
 import type { DecisionRecord, ShadowReport } from "@aion/decision-engine";
 import type { ActionRepository } from "./db/repository.js";
 import { ShadowDecisionRecorder } from "./decision/shadow.js";

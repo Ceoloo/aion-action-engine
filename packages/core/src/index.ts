@@ -1,5 +1,9 @@
 /**
- * AION Core — shared contracts for every Cursor-built AION tool.
+ * AION Action Core — shared contracts for the Action Engine workspace.
+ *
+ * Deliberately NOT named `@aion/core`: that name belongs to the canonical
+ * control-plane kernel (Ceoloo/aion-core). Governed side effects go through
+ * the Runtime Execution Gateway, never through this package.
  *
  * Every service exposes: inputSchema, execute(), eventEmitter, outputSchema
  * via AionTool so Agent OS can call it later.

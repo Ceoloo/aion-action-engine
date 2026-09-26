@@ -1,4 +1,4 @@
-import type { ActionObject } from "@aion/core";
+import type { ActionObject } from "@aion/action-core";
 import {
   DecisionEngine,
   RulesProvider,

@@ -1,5 +1,5 @@
 {
-  "name": "@aion/core",
+  "name": "@aion/action-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",

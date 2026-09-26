@@ -7,7 +7,7 @@ import type {
   EntityType,
   SuggestedAction,
   Urgency,
-} from "@aion/core";
+} from "@aion/action-core";
 
 export interface CreateActionInput {
   source: string;

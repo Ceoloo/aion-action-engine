@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@aion/actions": "workspace:*",
-    "@aion/core": "workspace:*",
+    "@aion/action-core": "workspace:*",
     "@aion/scoring": "workspace:*"
   },
   "devDependencies": {

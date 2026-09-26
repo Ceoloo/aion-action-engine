@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { ContextPackBuilder, assembleContextPack } from "./index.js";
-import { createExecutionContext } from "@aion/core";
+import { createExecutionContext } from "@aion/action-core";
 
 describe("@aion/context", () => {
   it("assembles a context pack for a lead follow-up", () => {

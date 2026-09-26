@@ -1,4 +1,4 @@
-import type { ExecutionContext, Permission } from "@aion/core";
+import type { ExecutionContext, Permission } from "@aion/action-core";
 
 export class PermissionError extends Error {
   constructor(
