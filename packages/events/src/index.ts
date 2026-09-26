@@ -1,4 +1,4 @@
-import type { ActionObject, EventDefinition } from "@aion/core";
+import type { ActionObject, EventDefinition } from "@aion/action-core";
 
 export type ActionEventName =
   | "action.created"

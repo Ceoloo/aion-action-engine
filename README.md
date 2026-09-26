@@ -10,7 +10,7 @@ Lifecycle: **Prototype** · Buyer: AION internal first · Success metric: ≥80%
 
 ```
 /apps/web                 Operator console (NOW / TODAY / QUEUED / AUTOMATED / NEEDS YOU / COMPLETED)
-/packages/core            AionTool interface, ExecutionContext, shared types
+/packages/core            @aion/action-core — AionTool interface, ExecutionContext, shared types (not the canonical @aion/core kernel)
 /packages/actions         Action Object schema + lifecycle transitions
 /packages/events          Structured event bus (action.created → outcome_recorded)
 /packages/scoring         Priority scoring from urgency / stale / intent signals

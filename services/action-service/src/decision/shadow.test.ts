@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeCreateInput, type CreateActionInput } from "@aion/actions";
-import type { ActionObject } from "@aion/core";
+import type { ActionObject } from "@aion/action-core";
 import {
   ShadowDecisionRecorder,
   approvalProbability,

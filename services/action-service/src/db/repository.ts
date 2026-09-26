@@ -1,4 +1,4 @@
-import type { ActionObject, ActionOutcome, SuggestedAction } from "@aion/core";
+import type { ActionObject, ActionOutcome, SuggestedAction } from "@aion/action-core";
 import type { ActionEvent } from "@aion/events";
 import type { ContextPack } from "@aion/context";
 import type Database from "better-sqlite3";

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { assertPermission, hasPermission, permissionsForRole } from "./index.js";
-import { createExecutionContext } from "@aion/core";
+import { createExecutionContext } from "@aion/action-core";
 
 describe("@aion/permissions", () => {
   it("grants operator permissions", () => {

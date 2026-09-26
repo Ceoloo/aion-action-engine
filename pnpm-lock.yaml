@@ -35,7 +35,7 @@ importers:
 
   packages/actions:
     dependencies:
-      '@aion/core':
+      '@aion/action-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -51,12 +51,12 @@ importers:
 
   packages/connectors:
     dependencies:
+      '@aion/action-core':
+        specifier: workspace:*
+        version: link:../core
       '@aion/actions':
         specifier: workspace:*
         version: link:../actions
-      '@aion/core':
-        specifier: workspace:*
-        version: link:../core
       '@aion/scoring':
         specifier: workspace:*
         version: link:../scoring
@@ -73,7 +73,7 @@ importers:
 
   packages/context:
     dependencies:
-      '@aion/core':
+      '@aion/action-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -113,7 +113,7 @@ importers:
 
   packages/events:
     dependencies:
-      '@aion/core':
+      '@aion/action-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -129,7 +129,7 @@ importers:
 
   packages/permissions:
     dependencies:
-      '@aion/core':
+      '@aion/action-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -145,7 +145,7 @@ importers:
 
   packages/scoring:
     dependencies:
-      '@aion/core':
+      '@aion/action-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -161,6 +161,9 @@ importers:
 
   services/action-service:
     dependencies:
+      '@aion/action-core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@aion/actions':
         specifier: workspace:*
         version: link:../../packages/actions
@@ -170,9 +173,6 @@ importers:
       '@aion/context':
         specifier: workspace:*
         version: link:../../packages/context
-      '@aion/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@aion/decision-engine':
         specifier: workspace:*
         version: link:../../packages/decision-engine

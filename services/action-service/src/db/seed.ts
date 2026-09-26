@@ -1,4 +1,4 @@
-import { createExecutionContext } from "@aion/core";
+import { createExecutionContext } from "@aion/action-core";
 import { permissionsForRole } from "@aion/permissions";
 import { revenueSignalToAction, agentRecommendationToAction } from "@aion/connectors";
 import { migrate, openDb, getDbPath } from "./client.js";

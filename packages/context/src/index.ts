@@ -9,7 +9,7 @@ import type {
   EventDefinition,
   ExecutionContext,
   Permission,
-} from "@aion/core";
+} from "@aion/action-core";
 
 export interface BuildContextInput {
   actor: string;

@@ -1,4 +1,4 @@
-import type { ActionType, Urgency } from "@aion/core";
+import type { ActionType, Urgency } from "@aion/action-core";
 
 export interface ScoringSignals {
   urgency?: Urgency;
