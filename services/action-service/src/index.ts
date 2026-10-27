@@ -30,6 +30,12 @@ const app = createApp(engine);
 
 const port = Number(process.env.PORT ?? 8787);
 
+if (!process.env.AION_ACTION_AUTH_PRINCIPALS && !process.env.AION_ACTION_DEV_TOKEN) {
+  console.warn(
+    "[action-service] AUTH NOT CONFIGURED — /v1 routes will return 503 until AION_ACTION_AUTH_PRINCIPALS or AION_ACTION_DEV_TOKEN is set"
+  );
+}
+
 const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`AION Action Service listening on http://localhost:${info.port}`);
 });
