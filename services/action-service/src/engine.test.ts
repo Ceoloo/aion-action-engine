@@ -10,6 +10,23 @@ import { ActionRepository } from "./db/repository.js";
 import { ActionEngine } from "./engine.js";
 import { ShadowDecisionRecorder } from "./decision/shadow.js";
 import { createApp } from "./app.js";
+import { createAuthResolver } from "./auth.js";
+
+const TEST_OPERATOR_TOKEN = "engine-test-operator";
+const TEST_PRODUCER_TOKEN = "engine-test-producer";
+
+const testAuth = createAuthResolver(
+  new Map([
+    [
+      TEST_OPERATOR_TOKEN,
+      { actor: "test", actorType: "system", role: "admin" },
+    ],
+    [
+      TEST_PRODUCER_TOKEN,
+      { actor: "revenue_copilot", actorType: "agent", role: "producer" },
+    ],
+  ])
+);
 
 describe("action-service", () => {
   let engine: ActionEngine;
@@ -22,7 +39,7 @@ describe("action-service", () => {
     const db = openDb(dbPath);
     migrate(db);
     engine = new ActionEngine(new ActionRepository(db));
-    app = createApp(engine);
+    app = createApp(engine, { auth: testAuth });
   });
 
   it("creates and buckets actions via API", async () => {
@@ -50,7 +67,9 @@ describe("action-service", () => {
     assert.match(action.id, /^act_/);
     assert.equal(engine.buckets().now.some((a) => a.id === action.id), true);
 
-    const res = await app.request("/v1/actions/buckets");
+    const res = await app.request("/v1/actions/buckets", {
+      headers: { Authorization: `Bearer ${TEST_OPERATOR_TOKEN}` },
+    });
     assert.equal(res.status, 200);
     const body = (await res.json()) as { counts: Record<string, number> };
     assert.ok(body.counts.now >= 1);
@@ -130,9 +149,9 @@ describe("action-service", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-aion-actor": "revenue_copilot",
-        "x-aion-role": "producer",
-        "x-aion-actor-type": "agent",
+        Authorization: `Bearer ${TEST_PRODUCER_TOKEN}`,
+        // Legacy role headers must be ignored; producer comes from token binding.
+        "x-aion-role": "admin",
       },
       body: JSON.stringify({
         eventType: "proposal_viewed",

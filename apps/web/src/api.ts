@@ -49,10 +49,12 @@ export interface BucketResponse {
   counts: Record<ActionBucket, number>;
 }
 
+/**
+ * Browser calls go through the Vite/BFF proxy, which injects Authorization.
+ * Do not send x-aion-role — permissions are bound server-side to the bearer.
+ */
 const headers = {
   "Content-Type": "application/json",
-  "x-aion-actor": "operator",
-  "x-aion-role": "operator",
 };
 
 async function parse<T>(res: Response): Promise<T> {

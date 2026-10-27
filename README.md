@@ -48,15 +48,33 @@ interface AionTool<TInput, TOutput> {
 | `buildContext()` | `POST /v1/context/build` |
 | `getContextPack()` | `GET /v1/context/:id` |
 
-Headers: `x-aion-actor`, `x-aion-role` (`operator` \| `agent` \| `producer` \| `viewer` \| `admin`), `x-aion-actor-type`.
+### Authentication (required)
+
+All `/v1/*` routes require `Authorization: Bearer <token>`. Permissions are
+bound **server-side** to that token via `AION_ACTION_AUTH_PRINCIPALS` (JSON) or
+`AION_ACTION_DEV_TOKEN` (requires `NODE_ENV=development` or `test`; loopback-only development). Client headers such as `x-aion-role` are
+**ignored** and must never be treated as authority — AION Core / Runtime remain
+the only authorization plane for governed side effects.
+
+```bash
+export AION_ACTION_AUTH_PRINCIPALS='[
+  {"token":"prod-operator","actor":"operator","actorType":"human","role":"operator","tenantId":"tenant_aion"},
+  {"token":"prod-producer","actor":"revenue_copilot","actorType":"agent","role":"producer","tenantId":"tenant_aion"}
+]'
+```
+
+Roles: `operator` | `agent` | `producer` | `viewer` | `admin`.
+
+This service is a **workspace satellite**, not a second control plane. Keep it
+off public networks until callers present AION-authenticated principals (BFF or
+Runtime-issued tokens).
 
 ## Revenue Copilot → Queue
 
 ```bash
 curl -X POST http://localhost:8787/v1/producers/revenue-copilot/events \
   -H 'content-type: application/json' \
-  -H 'x-aion-actor: revenue_copilot' \
-  -H 'x-aion-role: producer' \
+  -H 'Authorization: Bearer prod-producer' \
   -d '{
     "eventType": "application_stalled",
     "leadId": "lead_302",
@@ -141,3 +159,5 @@ Run AION itself through this queue for 14 days.
 - **First consumer:** Operator Console
 - **Hydration:** Context Pack Builder on every execute
 - **Next on the board:** Agent Execution Inspector, richer live connectors (Supabase / GHL / Notion)
+
+The development proxy has no fallback token and binds to loopback. This patch does not implement tenant row isolation: use one isolated workspace/database and keep the service non-public until tenant enforcement and an authenticated production BFF are verified.
